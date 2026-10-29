@@ -12,8 +12,7 @@ import uuid
 from typing import Optional
 
 from core.encoder import EncodedPuzzle
-from core.grid_generator import GeneratedGrid, PlacedWord
-from utils.config import CELL_WHITE, CELL_BLACK, BORDER_SOLID
+from utils.config import CELL_WHITE, CELL_BLACK
 
 
 @dataclass
@@ -37,6 +36,7 @@ class GameModel:
     elapsed_seconds: int = 0
     is_paused: bool = False
     is_completed: bool = False
+    num_codes: int = 26
 
     @classmethod
     def new_game(
@@ -52,7 +52,6 @@ class GameModel:
             short_id = uuid.uuid4().hex[:6]
             puzzle_id = f"puzzle_{now_str}_{short_id}"
 
-        # Le mapping initial du joueur commence avec les indices reveles
         initial_mapping = dict(puzzle.initial_hints)
 
         game = cls(
@@ -72,12 +71,9 @@ class GameModel:
             elapsed_seconds=0,
             is_paused=False,
             is_completed=False,
+            num_codes=puzzle.num_codes,
         )
         return game
-
-    # ------------------------------------------------------------------
-    # Requetes sur la grille
-    # ------------------------------------------------------------------
 
     def is_white(self, row: int, col: int) -> bool:
         """Retourne True si la case est une case blanche contenant une lettre."""
@@ -110,24 +106,15 @@ class GameModel:
         """Retourne True si ce code fait partie des indices donnes d'office."""
         return code in self.initial_hints
 
-    # ------------------------------------------------------------------
-    # Actions de jeu
-    # ------------------------------------------------------------------
-
     def set_letter_for_code(self, code: int, letter: Optional[str]) -> bool:
         """
-        Associe une lettre a un code chiffré (ou supprime l'association si None).
+        Associe une lettre a un code chiffre (ou supprime l'association si None).
         Ne modifie pas les indices d'office.
-
-        Returns
-        -------
-        True si la grille vient d'etre resolue avec succes, False sinon.
         """
         if self.is_completed:
             return False
 
         if self.is_hint(code):
-            # Les indices d'origine sont fixes et ne peuvent etre effaces
             return False
 
         if letter:
@@ -172,10 +159,6 @@ class GameModel:
             self.elapsed_seconds += 1
         return self.elapsed_seconds
 
-    # ------------------------------------------------------------------
-    # Serialisation / Deserialisation (JSON)
-    # ------------------------------------------------------------------
-
     def to_dict(self) -> dict:
         """Convertit l'etat du jeu en dictionnaire serialisable en JSON."""
         return {
@@ -195,11 +178,15 @@ class GameModel:
             "elapsed_seconds": self.elapsed_seconds,
             "is_paused": self.is_paused,
             "is_completed": self.is_completed,
+            "num_codes": self.num_codes,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> "GameModel":
         """Reconstitue une instance GameModel depuis un dictionnaire JSON."""
+        letter_to_code = data["letter_to_code"]
+        num_codes = data.get("num_codes", len(letter_to_code))
+
         return cls(
             puzzle_id=data["puzzle_id"],
             created_at=data["created_at"],
@@ -209,7 +196,7 @@ class GameModel:
             cell_types=data["cell_types"],
             v_borders=data["v_borders"],
             h_borders=data["h_borders"],
-            letter_to_code=data["letter_to_code"],
+            letter_to_code=letter_to_code,
             code_to_letter={int(k): v for k, v in data["code_to_letter"].items()},
             encoded_grid=data["encoded_grid"],
             initial_hints={int(k): v for k, v in data["initial_hints"].items()},
@@ -217,5 +204,5 @@ class GameModel:
             elapsed_seconds=data.get("elapsed_seconds", 0),
             is_paused=data.get("is_paused", False),
             is_completed=data.get("is_completed", False),
+            num_codes=num_codes,
         )
-

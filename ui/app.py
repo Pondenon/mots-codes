@@ -2,9 +2,13 @@
 app.py
 ------
 Fenetre principale de l'application Les Mots Codes.
-Gere la navigation entre l'ecran de menu et l'ecran de jeu,
-la synchronisation entre la grille et le panneau de saisie,
-l'auto-sauvegarde et la detection de victoire.
+Gere :
+- La navigation entre le menu et l'ecran de jeu.
+- Le Mode Clair et le Mode Sombre basculables sur chaque page.
+- Des boutons a fort contraste et tres lisibles.
+- L'adaptation dynamique aux tailles (dont Moyenne = 9 lignes x 17 colonnes).
+- La selection intelligente des indices (consonnes, 18-22% de couverture).
+- L'auto-sauvegarde et la detection de victoire.
 """
 
 import tkinter as tk
@@ -21,11 +25,11 @@ from ui.menu_screen import MenuScreen
 from ui.timer_widget import TimerWidget
 from utils.config import (
     APP_TITLE,
-    COLOR_BG,
-    COLOR_ACCENT,
-    COLOR_TEXT_LIGHT,
-    FONT_BUTTON,
+    THEME_LIGHT,
+    THEME_DARK,
     GRID_SIZES,
+    DEFAULT_GRID_SIZE,
+    FONT_BUTTON,
     WINDOW_MIN_WIDTH,
     WINDOW_MIN_HEIGHT,
 )
@@ -33,7 +37,7 @@ from utils.config import (
 
 class MotsCodesApp(tk.Tk):
     """
-    Application principale Tkinter.
+    Application principale Tkinter avec support dynamique du theme clair/sombre.
     """
 
     def __init__(self) -> None:
@@ -41,15 +45,16 @@ class MotsCodesApp(tk.Tk):
 
         self.title(APP_TITLE)
         self.minsize(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
-        self.configure(bg=COLOR_BG)
 
-        # Initialisation des gestionnaires de donnees
+        # Theme actif par defaut : Mode Clair moderne
+        self.theme = THEME_LIGHT
+        self.configure(bg=self.theme["bg"])
+
         self.store = PuzzleStore()
         self.generator = GridGenerator()
         self.current_game: Optional[GameModel] = None
 
-        # Conteneur principal
-        self.container = tk.Frame(self, bg=COLOR_BG)
+        self.container = tk.Frame(self, bg=self.theme["bg"])
         self.container.pack(fill=tk.BOTH, expand=True)
 
         self._build_screens()
@@ -65,24 +70,29 @@ class MotsCodesApp(tk.Tk):
             puzzle_store=self.store,
             on_start_new_game=self.start_new_game,
             on_resume_game=self.resume_game,
+            on_toggle_theme=self.toggle_theme,
+            theme=self.theme,
         )
 
         # 2. Ecran de jeu
-        self.game_frame = tk.Frame(self.container, bg=COLOR_BG)
+        self.game_frame = tk.Frame(self.container, bg=self.theme["bg"])
 
         # Barre superieure de jeu
-        self.header_frame = tk.Frame(self.game_frame, bg=COLOR_BG, pady=8, padx=15)
+        self.header_frame = tk.Frame(self.game_frame, bg=self.theme["bg"], pady=12, padx=20)
         self.header_frame.pack(side=tk.TOP, fill=tk.X)
 
         self.btn_back = tk.Button(
             self.header_frame,
             text="< Retour au Menu",
             font=FONT_BUTTON,
-            bg=COLOR_ACCENT,
-            fg=COLOR_TEXT_LIGHT,
+            bg=self.theme["btn_primary_bg"],
+            fg=self.theme["btn_primary_fg"],
+            activebackground=self.theme["accent_hover"],
+            activeforeground="#FFFFFF",
             relief=tk.FLAT,
-            padx=10,
-            pady=3,
+            bd=0,
+            padx=16,
+            pady=6,
             cursor="hand2",
             command=self.show_menu,
         )
@@ -92,40 +102,94 @@ class MotsCodesApp(tk.Tk):
             self.header_frame,
             text="",
             font=("Helvetica", 11, "bold"),
-            bg=COLOR_BG,
-            fg="#555555",
+            bg=self.theme["bg"],
+            fg=self.theme["text_muted"],
             padx=20,
         )
         self.info_label.pack(side=tk.LEFT)
 
+        # Bouton theme sur la page de jeu
+        theme_btn_text = "Mode Sombre" if self.theme["name"] == "light" else "Mode Clair"
+        self.btn_theme_game = tk.Button(
+            self.header_frame,
+            text=theme_btn_text,
+            font=FONT_BUTTON,
+            bg=self.theme["btn_theme_bg"],
+            fg=self.theme["btn_theme_fg"],
+            activebackground=self.theme["card_bg"],
+            activeforeground=self.theme["text_dark"],
+            relief=tk.FLAT,
+            bd=0,
+            padx=14,
+            pady=6,
+            cursor="hand2",
+            command=self.toggle_theme,
+        )
+        self.btn_theme_game.pack(side=tk.RIGHT, padx=(10, 0))
+
         self.timer_widget = TimerWidget(
             self.header_frame,
             on_pause_toggle=self._on_pause_toggle,
+            theme=self.theme,
         )
         self.timer_widget.pack(side=tk.RIGHT)
 
-        # Zone centrale de jeu (grille au centre, panneau de code a droite)
-        self.play_area = tk.Frame(self.game_frame, bg=COLOR_BG)
-        self.play_area.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        # Zone centrale de jeu
+        self.play_area = tk.Frame(self.game_frame, bg=self.theme["bg"])
+        self.play_area.pack(fill=tk.BOTH, expand=True, padx=15, pady=8)
 
         self.code_panel = CodePanel(
             self.play_area,
             on_code_changed=self._on_code_changed,
-            width=240,
+            theme=self.theme,
+            width=260,
         )
-        self.code_panel.pack(side=tk.RIGHT, fill=tk.Y, padx=(10, 0))
+        self.code_panel.pack(side=tk.RIGHT, fill=tk.Y, padx=(15, 0))
 
         self.grid_view = GridView(
             self.play_area,
             on_cell_clicked=self._on_cell_clicked,
+            theme=self.theme,
         )
         self.grid_view.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # Gestion des touches clavier directes sur la grille
         self.bind("<Key>", self._on_global_key)
 
+    def toggle_theme(self) -> None:
+        """Bascule entre le mode clair et le mode sombre."""
+        self.theme = THEME_DARK if self.theme["name"] == "light" else THEME_LIGHT
+        self._apply_current_theme()
+
+    def _apply_current_theme(self) -> None:
+        """Met a jour l'apparence de tous les composants selon le theme actif."""
+        self.configure(bg=self.theme["bg"])
+        self.container.config(bg=self.theme["bg"])
+        self.game_frame.config(bg=self.theme["bg"])
+        self.header_frame.config(bg=self.theme["bg"])
+        self.play_area.config(bg=self.theme["bg"])
+
+        self.info_label.config(bg=self.theme["bg"], fg=self.theme["text_muted"])
+
+        theme_btn_text = "Mode Sombre" if self.theme["name"] == "light" else "Mode Clair"
+        self.btn_theme_game.config(
+            text=theme_btn_text,
+            bg=self.theme["btn_theme_bg"],
+            fg=self.theme["btn_theme_fg"],
+        )
+
+        self.btn_back.config(
+            bg=self.theme["btn_primary_bg"],
+            fg=self.theme["btn_primary_fg"],
+            activebackground=self.theme["accent_hover"],
+        )
+
+        self.menu_screen.apply_theme(self.theme)
+        self.timer_widget.apply_theme(self.theme)
+        self.grid_view.apply_theme(self.theme)
+        self.code_panel.apply_theme(self.theme)
+
     def show_menu(self) -> None:
-        """Affiche l'ecran de menu et sauvegarde l'eventuelle partie en cours."""
+        """Affiche l'ecran d'accueil."""
         if self.current_game:
             self._save_current_state()
             self.timer_widget.stop()
@@ -135,17 +199,17 @@ class MotsCodesApp(tk.Tk):
         self.menu_screen.pack(fill=tk.BOTH, expand=True)
 
     def show_game(self) -> None:
-        """Bascule l'affichage sur l'ecran de jeu."""
+        """Bascule l'affichage sur la grille de jeu."""
         self.menu_screen.pack_forget()
         self.game_frame.pack(fill=tk.BOTH, expand=True)
 
     def start_new_game(self, size_label: str) -> None:
-        """Genere une nouvelle grille et lance la partie."""
-        width, height = GRID_SIZES.get(size_label, (13, 13))
+        """Genere une nouvelle grille dense avec la taille choisie."""
+        width, height = GRID_SIZES.get(size_label, (17, 9))
 
         generated_grid = self.generator.generate(width, height)
         if not generated_grid:
-            messagebox.showerror("Erreur", "Impossible de generer une grille avec cette taille.")
+            messagebox.showerror("Erreur", "Impossible de generer une grille pour cette taille.")
             return
 
         puzzle = PuzzleEncoder.encode(generated_grid)
@@ -154,7 +218,7 @@ class MotsCodesApp(tk.Tk):
         self._load_game_into_ui(game)
 
     def resume_game(self, puzzle_id: str) -> None:
-        """Reprend une partie existante depuis son identifiant."""
+        """Reprend une partie existante."""
         game = self.store.load_puzzle(puzzle_id)
         if not game:
             messagebox.showerror("Erreur", "Impossible de charger la partie demandee.")
@@ -163,15 +227,31 @@ class MotsCodesApp(tk.Tk):
         self._load_game_into_ui(game)
 
     def _load_game_into_ui(self, game: GameModel) -> None:
-        """Charge un GameModel dans l'interface et demarre."""
+        """Injecte l'etat de partie dans les composants visuels."""
         self.current_game = game
 
+        # Calcul de la couverture des indices
+        total_white = sum(
+            1 for r in range(game.height) for c in range(game.width)
+            if game.is_white(r, c)
+        )
+        hint_cells = sum(
+            1 for r in range(game.height) for c in range(game.width)
+            if game.is_white(r, c) and game.is_hint(game.encoded_grid[r][c])
+        )
+        coverage_pct = (hint_cells / total_white * 100) if total_white else 0
+
         self.info_label.config(
-            text=f"Grille {game.width}x{game.height} — {len(game.initial_hints)} indices"
+            text=f"Grille {game.height} l. x {game.width} col. — {game.num_codes} codes (1-{game.num_codes}) — Indices : {len(game.initial_hints)} consonnes ({coverage_pct:.0f}% des cases)"
         )
 
         self.grid_view.set_game(game)
-        self.code_panel.load_state(game.initial_hints, game.player_mapping)
+        self.code_panel.load_state(
+            hints=game.initial_hints,
+            player_mapping=game.player_mapping,
+            num_codes=game.num_codes,
+            theme=self.theme,
+        )
 
         self.timer_widget.set_time(game.elapsed_seconds)
         self.timer_widget.set_paused(game.is_paused)
@@ -184,7 +264,7 @@ class MotsCodesApp(tk.Tk):
             self.timer_widget.stop()
 
     def _on_code_changed(self, code: int, letter: Optional[str]) -> None:
-        """Declenche lors de la saisie d'une lettre dans le panneau lateral."""
+        """Declenche quand le joueur modifie une association code -> lettre."""
         if not self.current_game:
             return
 
@@ -196,12 +276,12 @@ class MotsCodesApp(tk.Tk):
             self._handle_victory()
 
     def _on_cell_clicked(self, row: int, col: int, code: int) -> None:
-        """Met en evidence le champ du panneau lateral lorsqu'une case est cliquee."""
+        """Selectionne la case et donne le focus a son entree correspondante."""
         if code in self.code_panel._entries:
             self.code_panel._entries[code].focus_set()
 
     def _on_global_key(self, event: tk.Event) -> None:
-        """Permet de taper directement sur le clavier pour la case selectionnee."""
+        """Permet la saisie directe au clavier sur la case selectionnee de la grille."""
         if not self.current_game or self.current_game.is_completed:
             return
 
@@ -223,7 +303,7 @@ class MotsCodesApp(tk.Tk):
             self._on_code_changed(code, None)
 
     def _on_pause_toggle(self, is_paused: bool) -> None:
-        """Gere la mise en pause depuis le widget chronometre."""
+        """Gere la mise en pause depuis le chronometre."""
         if self.current_game:
             self.current_game.is_paused = is_paused
             self._save_current_state()
@@ -235,7 +315,7 @@ class MotsCodesApp(tk.Tk):
             self.store.save_puzzle(self.current_game)
 
     def _handle_victory(self) -> None:
-        """Affiche la fenetre de victoire."""
+        """Affiche l'alerte de victoire."""
         self.timer_widget.stop()
         self._save_current_state()
 
@@ -250,8 +330,7 @@ class MotsCodesApp(tk.Tk):
         )
 
     def _on_close(self) -> None:
-        """Sauvegarde avant de quitter l'application."""
+        """Sauvegarde avant fermeture de la fenetre."""
         if self.current_game:
             self._save_current_state()
         self.destroy()
-

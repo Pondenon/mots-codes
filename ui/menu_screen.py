@@ -1,8 +1,10 @@
 """
 menu_screen.py
 --------------
-Ecran d'accueil permettant de choisir la taille de la grille,
-de lancer une nouvelle generation ou de reprendre un puzzle de l'historique.
+Ecran d'accueil permettant de choisir la taille de la grille (dont 9x17),
+de lancer une generation, de reprendre un puzzle de l'historique
+et de basculer entre le Mode Clair et le Mode Sombre.
+Boutons a tres fort contraste et ergonomie soignee.
 """
 
 from datetime import datetime
@@ -12,9 +14,8 @@ from typing import Callable, Optional
 
 from storage.puzzle_store import PuzzleStore
 from utils.config import (
-    COLOR_BG,
-    COLOR_ACCENT,
-    COLOR_TEXT_DARK,
+    THEME_LIGHT,
+    THEME_DARK,
     GRID_SIZES,
     DEFAULT_GRID_SIZE,
     FONT_TITLE,
@@ -24,7 +25,7 @@ from utils.config import (
 
 class MenuScreen(tk.Frame):
     """
-    Ecran principal d'accueil et de gestion de l'historique des puzzles.
+    Ecran principal d'accueil, historique des puzzles et selecteur de theme.
     """
 
     def __init__(
@@ -33,124 +34,164 @@ class MenuScreen(tk.Frame):
         puzzle_store: PuzzleStore,
         on_start_new_game: Callable[[str], None],
         on_resume_game: Callable[[str], None],
+        on_toggle_theme: Callable[[], None],
+        theme: dict = THEME_LIGHT,
         **kwargs,
     ) -> None:
-        super().__init__(parent, bg=COLOR_BG, **kwargs)
+        super().__init__(parent, bg=theme["bg"], **kwargs)
         self.puzzle_store = puzzle_store
         self.on_start_new_game = on_start_new_game
         self.on_resume_game = on_resume_game
+        self.on_toggle_theme = on_toggle_theme
+        self.theme = theme
 
         self.selected_size_var = tk.StringVar(value=DEFAULT_GRID_SIZE)
 
         self._build_ui()
 
     def _build_ui(self) -> None:
-        """Construit l'interface du menu d'accueil."""
-        # En-tete
-        header_frame = tk.Frame(self, bg=COLOR_BG, pady=15)
-        header_frame.pack(side=tk.TOP, fill=tk.X)
+        """Construit l'interface du menu d'accueil avec un design soigne."""
+        # Barre superieure avec Titre et Bouton Theme
+        self.top_bar = tk.Frame(self, bg=self.theme["bg"], pady=14, padx=25)
+        self.top_bar.pack(side=tk.TOP, fill=tk.X)
 
-        title = tk.Label(
-            header_frame,
+        header_center = tk.Frame(self.top_bar, bg=self.theme["bg"])
+        header_center.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        self.title_label = tk.Label(
+            header_center,
             text="Les Mots Codes",
             font=FONT_TITLE,
-            bg=COLOR_BG,
-            fg=COLOR_ACCENT,
+            bg=self.theme["bg"],
+            fg=self.theme["accent"],
+            anchor="w",
         )
-        title.pack()
+        self.title_label.pack(anchor="w")
 
-        subtitle = tk.Label(
-            header_frame,
+        self.subtitle_label = tk.Label(
+            header_center,
             text="Jeu de mots croises chiffres d'apres Jean Paul Cordier",
             font=("Helvetica", 11, "italic"),
-            bg=COLOR_BG,
-            fg="#666666",
+            bg=self.theme["bg"],
+            fg=self.theme["text_muted"],
+            anchor="w",
         )
-        subtitle.pack(pady=4)
+        self.subtitle_label.pack(anchor="w", pady=(2, 0))
+
+        # Bouton bascule de theme
+        theme_btn_text = "Mode Sombre" if self.theme["name"] == "light" else "Mode Clair"
+        self.btn_theme = tk.Button(
+            self.top_bar,
+            text=theme_btn_text,
+            font=FONT_BUTTON,
+            bg=self.theme["btn_theme_bg"],
+            fg=self.theme["btn_theme_fg"],
+            activebackground=self.theme["card_bg"],
+            activeforeground=self.theme["text_dark"],
+            relief=tk.FLAT,
+            bd=0,
+            padx=14,
+            pady=6,
+            cursor="hand2",
+            command=self.on_toggle_theme,
+        )
+        self.btn_theme.pack(side=tk.RIGHT, padx=5)
 
         # Section Nouvelle Partie
-        new_game_box = tk.LabelFrame(
+        self.new_game_box = tk.LabelFrame(
             self,
             text=" Nouvelle Partie ",
             font=("Helvetica", 12, "bold"),
-            bg=COLOR_BG,
-            fg=COLOR_TEXT_DARK,
-            padx=15,
-            pady=15,
+            bg=self.theme["card_bg"],
+            fg=self.theme["text_dark"],
+            bd=1,
+            relief=tk.SOLID,
+            padx=20,
+            pady=16,
         )
-        new_game_box.pack(side=tk.TOP, fill=tk.X, padx=25, pady=10)
+        self.new_game_box.pack(side=tk.TOP, fill=tk.X, padx=25, pady=10)
 
-        size_label = tk.Label(
-            new_game_box,
-            text="Choisissez la taille de la grille :",
+        self.size_label = tk.Label(
+            self.new_game_box,
+            text="Choisissez la taille de la grille (grille dense, <= 10% cases noires) :",
             font=("Helvetica", 11),
-            bg=COLOR_BG,
-            fg=COLOR_TEXT_DARK,
+            bg=self.theme["card_bg"],
+            fg=self.theme["text_dark"],
         )
-        size_label.pack(anchor="w", pady=(0, 5))
+        self.size_label.pack(anchor="w", pady=(0, 10))
 
-        radio_frame = tk.Frame(new_game_box, bg=COLOR_BG)
-        radio_frame.pack(fill=tk.X, pady=5)
+        self.radio_frame = tk.Frame(self.new_game_box, bg=self.theme["card_bg"])
+        self.radio_frame.pack(fill=tk.X, pady=5)
 
+        self.radio_buttons = []
         for name, (w, h) in GRID_SIZES.items():
+            extra_info = " (recommandee)" if name == "Moyenne" else ""
             rb = tk.Radiobutton(
-                radio_frame,
-                text=f"{name} ({w}x{h})",
+                self.radio_frame,
+                text=f"{name} : {h} lignes x {w} colonnes{extra_info}",
                 variable=self.selected_size_var,
                 value=name,
-                font=("Helvetica", 11),
-                bg=COLOR_BG,
-                activebackground=COLOR_BG,
+                font=("Helvetica", 11, "bold" if name == "Moyenne" else "normal"),
+                bg=self.theme["card_bg"],
+                fg=self.theme["text_dark"],
+                activebackground=self.theme["card_bg"],
+                activeforeground=self.theme["text_dark"],
+                selectcolor=self.theme["card_bg"],
                 cursor="hand2",
             )
             rb.pack(side=tk.LEFT, padx=15)
+            self.radio_buttons.append(rb)
 
-        btn_start = tk.Button(
-            new_game_box,
+        self.btn_start = tk.Button(
+            self.new_game_box,
             text="Generer et Jouer",
             font=("Helvetica", 12, "bold"),
-            bg=COLOR_ACCENT,
-            fg="#FFFFFF",
+            bg=self.theme["btn_primary_bg"],
+            fg=self.theme["btn_primary_fg"],
+            activebackground=self.theme["accent_hover"],
+            activeforeground="#FFFFFF",
             relief=tk.FLAT,
-            padx=15,
-            pady=8,
+            bd=0,
+            padx=24,
+            pady=10,
             cursor="hand2",
             command=self._handle_start_click,
         )
-        btn_start.pack(pady=(12, 0))
+        self.btn_start.pack(pady=(16, 2))
 
         # Section Historique des parties
-        history_box = tk.LabelFrame(
+        self.history_box = tk.LabelFrame(
             self,
             text=" Historique des Parties ",
             font=("Helvetica", 12, "bold"),
-            bg=COLOR_BG,
-            fg=COLOR_TEXT_DARK,
+            bg=self.theme["card_bg"],
+            fg=self.theme["text_dark"],
+            bd=1,
+            relief=tk.SOLID,
             padx=15,
-            pady=10,
+            pady=12,
         )
-        history_box.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=25, pady=(5, 15))
+        self.history_box.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=25, pady=(5, 12))
 
-        # Tableau Treeview pour l'historique
         columns = ("date", "size", "time", "status")
         self.tree = ttk.Treeview(
-            history_box,
+            self.history_box,
             columns=columns,
             show="headings",
             selectmode="browse",
             height=6,
         )
         self.tree.heading("date", text="Date de creation")
-        self.tree.heading("size", text="Taille")
+        self.tree.heading("size", text="Taille (lignes x colonnes)")
         self.tree.heading("time", text="Temps")
         self.tree.heading("status", text="Statut")
 
         self.tree.column("date", width=180, anchor="center")
-        self.tree.column("size", width=100, anchor="center")
-        self.tree.column("time", width=100, anchor="center")
-        self.tree.column("status", width=120, anchor="center")
+        self.tree.column("size", width=170, anchor="center")
+        self.tree.column("time", width=110, anchor="center")
+        self.tree.column("status", width=130, anchor="center")
 
-        scrollbar = ttk.Scrollbar(history_box, orient=tk.VERTICAL, command=self.tree.yview)
+        scrollbar = ttk.Scrollbar(self.history_box, orient=tk.VERTICAL, command=self.tree.yview)
         self.tree.configure(yscrollcommand=scrollbar.set)
 
         self.tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -159,52 +200,151 @@ class MenuScreen(tk.Frame):
         self.tree.bind("<Double-1>", lambda _: self._handle_resume_click())
 
         # Boutons d'action sur l'historique
-        btn_hist_frame = tk.Frame(self, bg=COLOR_BG)
-        btn_hist_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=25, pady=(0, 15))
+        self.btn_hist_frame = tk.Frame(self, bg=self.theme["bg"])
+        self.btn_hist_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=25, pady=(0, 16))
 
-        btn_resume = tk.Button(
-            btn_hist_frame,
+        self.btn_resume = tk.Button(
+            self.btn_hist_frame,
             text="Reprendre la partie selectionnee",
             font=FONT_BUTTON,
-            bg="#2E7D32",
-            fg="#FFFFFF",
+            bg=self.theme["btn_success_bg"],
+            fg=self.theme["btn_success_fg"],
+            activebackground="#14532D",
+            activeforeground="#FFFFFF",
             relief=tk.FLAT,
-            padx=10,
-            pady=4,
+            bd=0,
+            padx=16,
+            pady=8,
             cursor="hand2",
             command=self._handle_resume_click,
         )
-        btn_resume.pack(side=tk.LEFT, padx=5)
+        self.btn_resume.pack(side=tk.LEFT, padx=5)
 
-        btn_delete = tk.Button(
-            btn_hist_frame,
+        self.btn_delete = tk.Button(
+            self.btn_hist_frame,
             text="Supprimer",
             font=FONT_BUTTON,
-            bg="#C62828",
-            fg="#FFFFFF",
+            bg=self.theme["btn_danger_bg"],
+            fg=self.theme["btn_danger_fg"],
+            activebackground="#7F1D1D",
+            activeforeground="#FFFFFF",
             relief=tk.FLAT,
-            padx=10,
-            pady=4,
+            bd=0,
+            padx=16,
+            pady=8,
             cursor="hand2",
             command=self._handle_delete_click,
         )
-        btn_delete.pack(side=tk.LEFT, padx=5)
+        self.btn_delete.pack(side=tk.LEFT, padx=5)
 
-        btn_refresh = tk.Button(
-            btn_hist_frame,
+        self.btn_refresh = tk.Button(
+            self.btn_hist_frame,
             text="Actualiser",
             font=FONT_BUTTON,
-            bg="#666666",
-            fg="#FFFFFF",
+            bg=self.theme["btn_secondary_bg"],
+            fg=self.theme["btn_secondary_fg"],
+            activebackground="#1E293B",
+            activeforeground="#FFFFFF",
             relief=tk.FLAT,
-            padx=10,
-            pady=4,
+            bd=0,
+            padx=16,
+            pady=8,
             cursor="hand2",
             command=self.refresh_history,
         )
-        btn_refresh.pack(side=tk.RIGHT, padx=5)
+        self.btn_refresh.pack(side=tk.RIGHT, padx=5)
 
+        self._configure_tree_style()
         self.refresh_history()
+
+    def _configure_tree_style(self) -> None:
+        """Adapte le style du Treeview selon le theme."""
+        style = ttk.Style()
+        style.theme_use("default")
+
+        bg = self.theme["card_bg"]
+        fg = self.theme["text_dark"]
+        selected_bg = self.theme["accent"]
+
+        style.configure(
+            "Treeview",
+            background=bg,
+            foreground=fg,
+            fieldbackground=bg,
+            rowheight=28,
+            font=("Helvetica", 10),
+        )
+        style.map(
+            "Treeview",
+            background=[("selected", selected_bg)],
+            foreground=[("selected", "#FFFFFF")],
+        )
+        style.configure(
+            "Treeview.Heading",
+            background=self.theme["bg"],
+            foreground=fg,
+            font=("Helvetica", 10, "bold"),
+            relief="flat",
+        )
+
+    def apply_theme(self, theme: dict) -> None:
+        """Applique les couleurs du theme a l'ensemble des composants du menu."""
+        self.theme = theme
+        self.config(bg=theme["bg"])
+        self.top_bar.config(bg=theme["bg"])
+
+        self.title_label.config(bg=theme["bg"], fg=theme["accent"])
+        self.subtitle_label.config(bg=theme["bg"], fg=theme["text_muted"])
+        self.btn_hist_frame.config(bg=theme["bg"])
+
+        theme_btn_text = "Mode Sombre" if theme["name"] == "light" else "Mode Clair"
+        self.btn_theme.config(
+            text=theme_btn_text,
+            bg=theme["btn_theme_bg"],
+            fg=theme["btn_theme_fg"],
+        )
+
+        self.new_game_box.config(
+            bg=theme["card_bg"],
+            fg=theme["text_dark"],
+        )
+        self.size_label.config(bg=theme["card_bg"], fg=theme["text_dark"])
+        self.radio_frame.config(bg=theme["card_bg"])
+
+        for rb in self.radio_buttons:
+            rb.config(
+                bg=theme["card_bg"],
+                fg=theme["text_dark"],
+                activebackground=theme["card_bg"],
+                activeforeground=theme["text_dark"],
+                selectcolor=theme["card_bg"],
+            )
+
+        self.btn_start.config(
+            bg=theme["btn_primary_bg"],
+            fg=theme["btn_primary_fg"],
+            activebackground=theme["accent_hover"],
+        )
+
+        self.history_box.config(
+            bg=theme["card_bg"],
+            fg=theme["text_dark"],
+        )
+
+        self.btn_resume.config(
+            bg=theme["btn_success_bg"],
+            fg=theme["btn_success_fg"],
+        )
+        self.btn_delete.config(
+            bg=theme["btn_danger_bg"],
+            fg=theme["btn_danger_fg"],
+        )
+        self.btn_refresh.config(
+            bg=theme["btn_secondary_bg"],
+            fg=theme["btn_secondary_fg"],
+        )
+
+        self._configure_tree_style()
 
     def refresh_history(self) -> None:
         """Recharge la liste des parties sauvegardees."""
@@ -220,7 +360,7 @@ class MenuScreen(tk.Frame):
             except Exception:
                 display_date = created_str[:16]
 
-            size_str = f"{p.get('width', 0)}x{p.get('height', 0)}"
+            size_str = f"{p.get('height', 0)} l. x {p.get('width', 0)} col."
 
             sec = p.get("elapsed_seconds", 0)
             time_str = f"{sec // 60:02d}:{sec % 60:02d}"
@@ -259,4 +399,3 @@ class MenuScreen(tk.Frame):
         if messagebox.askyesno("Confirmation", "Voulez-vous supprimer cette partie ?"):
             self.puzzle_store.delete_puzzle(puzzle_id)
             self.refresh_history()
-

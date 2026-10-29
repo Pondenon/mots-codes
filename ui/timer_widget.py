@@ -2,19 +2,13 @@
 timer_widget.py
 ---------------
 Widget Tkinter pour afficher le chronometre et controler la pause.
+Supporte les themes clair et sombre.
 """
 
 import tkinter as tk
-from tkinter import ttk
 from typing import Callable, Optional
 
-from utils.config import (
-    COLOR_BG,
-    COLOR_ACCENT,
-    COLOR_TEXT_DARK,
-    FONT_TIMER,
-    FONT_BUTTON,
-)
+from utils.config import THEME_LIGHT, FONT_TIMER, FONT_BUTTON
 
 
 class TimerWidget(tk.Frame):
@@ -26,10 +20,12 @@ class TimerWidget(tk.Frame):
         self,
         parent: tk.Widget,
         on_pause_toggle: Optional[Callable[[bool], None]] = None,
+        theme: dict = THEME_LIGHT,
         **kwargs,
     ) -> None:
-        super().__init__(parent, bg=COLOR_BG, **kwargs)
+        super().__init__(parent, bg=theme["bg"], **kwargs)
         self.on_pause_toggle = on_pause_toggle
+        self.theme = theme
 
         self._elapsed_seconds = 0
         self._is_paused = False
@@ -44,8 +40,8 @@ class TimerWidget(tk.Frame):
             self,
             text="00:00",
             font=FONT_TIMER,
-            bg=COLOR_BG,
-            fg=COLOR_TEXT_DARK,
+            bg=self.theme["bg"],
+            fg=self.theme["text_dark"],
             padx=10,
         )
         self.time_label.pack(side=tk.LEFT)
@@ -56,13 +52,22 @@ class TimerWidget(tk.Frame):
             font=FONT_BUTTON,
             command=self._handle_pause_click,
             relief=tk.FLAT,
-            bg=COLOR_ACCENT,
-            fg="#FFFFFF",
-            padx=8,
-            pady=2,
+            bg=self.theme["btn_primary_bg"],
+            fg=self.theme["btn_primary_fg"],
+            activebackground=self.theme["accent_hover"],
+            activeforeground="#FFFFFF",
+            padx=12,
+            pady=4,
             cursor="hand2",
         )
         self.pause_button.pack(side=tk.LEFT, padx=5)
+
+    def apply_theme(self, theme: dict) -> None:
+        """Met a jour les couleurs du chronometre selon le theme."""
+        self.theme = theme
+        self.config(bg=theme["bg"])
+        self.time_label.config(bg=theme["bg"], fg=theme["text_dark"])
+        self._update_button_text()
 
     def _handle_pause_click(self) -> None:
         """Gere le clic sur le bouton pause/reprise."""
@@ -72,11 +77,19 @@ class TimerWidget(tk.Frame):
             self.on_pause_toggle(self._is_paused)
 
     def _update_button_text(self) -> None:
-        """Met a jour le texte du bouton selon l'etat."""
+        """Met a jour le texte et les couleurs du bouton selon l'etat."""
         if self._is_paused:
-            self.pause_button.config(text="Reprendre", bg="#2E7D32")
+            self.pause_button.config(
+                text="Reprendre",
+                bg=self.theme["btn_success_bg"],
+                fg=self.theme["btn_success_fg"],
+            )
         else:
-            self.pause_button.config(text="Pause", bg=COLOR_ACCENT)
+            self.pause_button.config(
+                text="Pause",
+                bg=self.theme["btn_primary_bg"],
+                fg=self.theme["btn_primary_fg"],
+            )
 
     def set_time(self, seconds: int) -> None:
         """Definit le temps actuel du chronometre."""
@@ -130,4 +143,3 @@ class TimerWidget(tk.Frame):
     def get_elapsed_seconds(self) -> int:
         """Retourne le nombre total de secondes ecoulees."""
         return self._elapsed_seconds
-
