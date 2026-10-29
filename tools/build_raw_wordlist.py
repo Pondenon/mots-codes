@@ -23,10 +23,18 @@ OUTPUT   = Path(__file__).resolve().parent.parent / "data" / "french" / "french_
 # Fichiers CSV à fusionner
 CSV_FILES = ["noun.csv", "verb.csv", "adj.csv", "adv.csv"]
 
-# Regex : lettres a-z uniquement (accents déjà supprimés avant vérif)
-# Accepte les mots simples ET les mots composés avec UN espace interne
+# Regex : lettres a-z uniquement (accents deja supprimes avant verif)
+# Accepte les mots simples ET les mots composes avec UN espace interne
 VALID_SIMPLE   = re.compile(r"^[a-z]{2,16}$")
 VALID_COMPOUND = re.compile(r"^[a-z]{1,15} [a-z]{1,15}$")
+
+# Pronoms personnels / reflechis a exclure de tous les mots composes.
+# On garde les prepositions ("a", "de", "en", "ex", "ad") qui font partie
+# d'expressions figees comme "a priori", "en masse", "ex aequo", "ad hoc".
+PRONOUN_BLACKLIST = {
+    "je", "tu", "on", "nous", "vous", "ils", "elles",
+    "me", "te", "se", "lui", "leur", "moi", "toi", "soi",
+}
 
 # ── Fonctions ─────────────────────────────────────────────────────────────────
 
@@ -42,17 +50,16 @@ def normalize(word: str) -> str:
     """Lowercase + suppression des accents."""
     return remove_accents(word.strip().lower())
 
-def is_valid(word: str) -> bool:
-    """
-    Retourne True si le mot :
-    - est uniquement composé de lettres a-z (accents déjà retirés)
-    - fait entre 2 et 16 lettres (espaces non comptés)
-    - est un mot simple OU un mot composé avec un seul espace interne
-    """
-    letters_only = word.replace(" ", "")
-    if not (2 <= len(letters_only) <= 16):
+def is_valid_simple(word: str) -> bool:
+    """Retourne True si le mot est un mot simple valide (lettres a-z, 2-16 chars)."""
+    return bool(VALID_SIMPLE.match(word)) and 2 <= len(word) <= 16
+
+def is_valid_compound(word: str) -> bool:
+    """Retourne True si le mot est un compose valide sans pronom."""
+    if not VALID_COMPOUND.match(word):
         return False
-    return bool(VALID_SIMPLE.match(word)) or bool(VALID_COMPOUND.match(word))
+    letters_only = word.replace(" ", "")
+    return 2 <= len(letters_only) <= 16
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -70,12 +77,27 @@ def main():
             reader = csv.DictReader(f)
             for row in reader:
                 word = normalize(row.get("form", ""))
-                if not is_valid(word):
+                if not word:
                     continue
+
                 if " " in word:
-                    compound_words.add(word)
+                    parts = word.split(" ")
+                    pronoun_parts     = [p for p in parts if p in PRONOUN_BLACKLIST]
+                    non_pronoun_parts = [p for p in parts if p not in PRONOUN_BLACKLIST]
+
+                    if pronoun_parts:
+                        # Compose avec pronom : on recupere uniquement les parties valides
+                        # comme mots simples (ex: "vous connaissez" -> "connaissez")
+                        for part in non_pronoun_parts:
+                            if is_valid_simple(part):
+                                simple_words.add(part)
+                    else:
+                        # Compose sans pronom : expression figee a garder telle quelle
+                        if is_valid_compound(word):
+                            compound_words.add(word)
                 else:
-                    simple_words.add(word)
+                    if is_valid_simple(word):
+                        simple_words.add(word)
 
         print(f"  {filename} — simples : {len(simple_words):,}  composés : {len(compound_words):,}")
 
