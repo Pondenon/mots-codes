@@ -218,3 +218,25 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ---------------------------
+# macOS system files
+# ---------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# ---------------------------
+# Mots Codés — project specific
+# ---------------------------
+
+# Dictionnaire brut (trop lourd — téléchargé séparément)
+data/*/**/*_words_raw.txt
+
+# Bases SQLite générées (recréées via tools/setup_dictionary.py)
+data/**/*.db
+
+# Puzzles sauvegardés localement (propres à chaque utilisateur)
+data/*/puzzles/*.json
